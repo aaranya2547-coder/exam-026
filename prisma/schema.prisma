@@ -1,0 +1,158 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Accommodation Booking System Models
+
+model Region {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique @db.VarChar(50) // ภาคเหนือ, ใต้, อีสาน, กลาง
+  slug        String    @unique @db.VarChar(50)
+  description String?   @db.Text
+  imageUrl    String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  provinces      Province[]
+  accommodations Accommodation[]
+
+  @@map("regions")
+}
+
+model Province {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique @db.VarChar(100)
+  slug        String    @unique @db.VarChar(100)
+  regionId    Int
+  description String?   @db.Text
+  imageUrl    String?   @db.VarChar(255)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  region         Region         @relation(fields: [regionId], references: [id])
+  accommodations Accommodation[]
+
+  @@map("provinces")
+  @@index([regionId])
+  @@index([slug])
+}
+
+model Accommodation {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(200)
+  slug        String    @unique @db.VarChar(200)
+  description String    @db.Text
+  shortDesc   String    @db.VarChar(255)
+  regionId    Int
+  provinceId  Int?
+  pricePerNight Decimal @db.Decimal(10, 2)
+  maxGuests   Int
+  address     String    @db.Text
+  latitude    Decimal?  @db.Decimal(10, 8)
+  longitude   Decimal?  @db.Decimal(11, 8)
+  amenities   String?   @db.Text // JSON string of amenities
+  images      String?   @db.Text // JSON array of image URLs
+  isAvailable Boolean   @default(true)
+  isFeatured  Boolean   @default(false) // โลเคชั่นแนะนำ
+  rating      Decimal?  @db.Decimal(3, 2) // คะแนนรีวิว 0.00-5.00
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  region      Region     @relation(fields: [regionId], references: [id])
+  province    Province?  @relation(fields: [provinceId], references: [id])
+  bookings    Booking[]
+  promotions  AccommodationPromotion[]
+
+  @@map("accommodations")
+  @@index([regionId])
+  @@index([provinceId])
+  @@index([slug])
+  @@index([isFeatured])
+}
+
+model Promotion {
+  id          Int       @id @default(autoincrement())
+  name        String    @db.VarChar(200)
+  slug        String    @unique @db.VarChar(200)
+  description String    @db.Text
+  discountType String   @db.VarChar(20) // percentage, fixed
+  discountValue Decimal @db.Decimal(10, 2)
+  startDate   DateTime  @db.Date
+  endDate     DateTime  @db.Date
+  season      String?   @db.VarChar(100) // เทศกาล เช่น ปีใหม่, สงกรานต์
+  isActive    Boolean   @default(true)
+  minNights   Int?      // จำนวนคืนขั้นต่ำ
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  accommodations AccommodationPromotion[]
+
+  @@map("promotions")
+  @@index([slug])
+  @@index([isActive])
+  @@index([startDate, endDate])
+}
+
+model AccommodationPromotion {
+  id              Int       @id @default(autoincrement())
+  accommodationId Int
+  promotionId     Int
+  createdAt       DateTime  @default(now())
+
+  accommodation   Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+  promotion       Promotion     @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+
+  @@unique([accommodationId, promotionId])
+  @@map("accommodation_promotions")
+  @@index([accommodationId])
+  @@index([promotionId])
+}
+
+model Customer {
+  id        Int       @id @default(autoincrement())
+  fullName  String    @db.VarChar(100)
+  email     String    @unique @db.VarChar(100)
+  phone     String    @db.VarChar(20)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  bookings  Booking[]
+
+  @@map("customers")
+}
+
+model Booking {
+  id              Int       @id @default(autoincrement())
+  bookingNumber   String    @unique @db.VarChar(50)
+  accommodationId Int
+  customerId      Int
+  checkInDate     DateTime  @db.Date
+  checkOutDate    DateTime  @db.Date
+  numberOfGuests  Int
+  numberOfNights  Int
+  totalPrice      Decimal   @db.Decimal(10, 2)
+  status          String    @default("confirmed") @db.VarChar(20) // confirmed, cancelled, completed
+  specialRequests String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+  customer        Customer      @relation(fields: [customerId], references: [id])
+
+  @@map("bookings")
+  @@index([accommodationId])
+  @@index([customerId])
+  @@index([checkInDate, checkOutDate])
+}
